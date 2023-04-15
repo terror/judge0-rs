@@ -10,10 +10,10 @@ clippy:
   cargo clippy --all-targets --all-features
 
 fmt:
-  cargo fmt
+  cargo +nightly fmt
 
 fmt-check:
-  cargo fmt --all -- --check
+  cargo +nightly fmt --all -- --check
 
 test:
   cargo test
