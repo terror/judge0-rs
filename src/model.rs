@@ -88,7 +88,7 @@ pub struct Submission {
   message: Option<String>,
   /// The program’s exit code.
   exit_code: Option<i64>,
-  /// Signal code that the program recieved before exiting.
+  /// Signal code that the program received before exiting.
   exit_signal: Option<i64>,
   /// Submission status.
   status: Option<Status>,

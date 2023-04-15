@@ -9,6 +9,7 @@ pub struct Client<'a> {
 }
 
 impl<'a> Client<'a> {
+  /// Create a new client.
   pub fn new(base_url: &'a str) -> Client {
     Self {
       base64_encoded: false,
@@ -18,7 +19,7 @@ impl<'a> Client<'a> {
     }
   }
 
-  /// Set to true if you want to send Base64 encoded data to Judge0
+  /// Set to true if you want to send Base64 encoded data to Judge0.
   pub fn set_base64_encoded(&mut self, base64_encoded: bool) {
     self.base64_encoded = base64_encoded;
   }
@@ -27,7 +28,7 @@ impl<'a> Client<'a> {
   /// set the wait query parameter to true which will enable you to get
   /// submission status immediately as part of response to the request you made.
   ///
-  /// n.b The use of wait=true feature is not reccomended because it does not
+  /// n.b The use of wait=true feature is not recommended because it does not
   /// scale well.
   pub fn set_wait(&mut self, wait: bool) {
     self.wait = wait;
@@ -66,7 +67,7 @@ impl<'a> Client<'a> {
     self.request::<About>("/statuses", Method::GET, None).await
   }
 
-  /// Create a submission
+  /// Create a submission.
   pub async fn create_submission(
     self,
     headers: Option<HeaderMap>,
@@ -77,12 +78,31 @@ impl<'a> Client<'a> {
           "/submissions?base64_encoded={}&wait={}",
           self.base64_encoded, self.wait
         ),
-        Method::GET,
+        Method::POST,
         headers,
       )
       .await
   }
 
+  /// Get a single submission.
+  pub async fn get_submission(
+    self,
+    token: &str,
+    fields: &str,
+  ) -> Result<Submission> {
+    self
+      .request::<Submission>(
+        &format!(
+          "/submissions/{token}?base64_encoded={}&wait={}&fields={fields}",
+          self.base64_encoded, self.wait
+        ),
+        Method::GET,
+        None,
+      )
+      .await
+  }
+
+  /// Make an asynchronous request.
   async fn request<T: DeserializeOwned>(
     &self,
     endpoint: &str,
