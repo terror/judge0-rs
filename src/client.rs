@@ -20,8 +20,11 @@ impl<'a> Client<'a> {
   }
 
   /// Set to true if you want to send Base64 encoded data to Judge0.
-  pub fn set_base64_encoded(&mut self, base64_encoded: bool) {
-    self.base64_encoded = base64_encoded;
+  pub fn set_base64_encoded(self, base64_encoded: bool) -> Self {
+    Self {
+      base64_encoded,
+      ..self
+    }
   }
 
   /// Instead of checking submission status by making another request, you can
@@ -30,8 +33,8 @@ impl<'a> Client<'a> {
   ///
   /// n.b The use of wait=true feature is not recommended because it does not
   /// scale well.
-  pub fn set_wait(&mut self, wait: bool) {
-    self.wait = wait;
+  pub fn set_wait(self, wait: bool) -> Self {
+    Self { wait, ..self }
   }
 
   /// Get active languages.
