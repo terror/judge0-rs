@@ -1,10 +1,13 @@
 use super::*;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Language {
   pub id: usize,
   pub name: String,
   pub is_archived: Option<bool>,
+  pub source_file: Option<String>,
+  pub compile_cmd: Option<String>,
+  pub run_cmd: Option<String>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]

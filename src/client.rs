@@ -1,18 +1,18 @@
 use super::*;
 
 #[derive(Debug)]
-pub struct Client<'a> {
-  base_url: &'a str,
+pub struct Client {
+  base_url: String,
   client: reqwest::Client,
   base64_encoded: bool,
   wait: bool,
 }
 
-impl<'a> Client<'a> {
+impl Client {
   /// Create a new client.
-  pub fn new(base_url: &'a str) -> Client {
+  pub fn new(base_url: &str) -> Client {
     Self {
-      base_url,
+      base_url: base_url.to_owned(),
       client: reqwest::Client::new(),
       base64_encoded: false,
       wait: false,
@@ -197,5 +197,83 @@ impl<'a> Client<'a> {
     request = request.body(serde_json::to_string(&body)?);
 
     Ok(request.send().await?.json::<T>().await?)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use {
+    super::*,
+    mockito::{Server, ServerGuard},
+  };
+
+  struct TestContext {
+    server: ServerGuard,
+  }
+
+  impl TestContext {
+    async fn new() -> Self {
+      Self {
+        server: Server::new_async().await,
+      }
+    }
+  }
+
+  #[tokio::test(flavor = "multi_thread")]
+  async fn languages_ok() {
+    let TestContext { mut server } = TestContext::new().await;
+
+    let client = Client::new(&server.url());
+
+    let body = r#" [
+      { "id": 45, "name": "Assembly (NASM 2.14.02)" },
+      { "id": 46, "name": "Bash (5.0.0)" },
+      { "id": 47, "name": "Basic (FBC 1.07.1)" }
+    ]"#;
+
+    let mock = server
+      .mock("GET", "/languages")
+      .with_status(200)
+      .with_header("content-type", "application/json")
+      .with_body(body)
+      .create();
+
+    let languages = client.get_languages().await.unwrap();
+
+    assert_eq!(
+      languages,
+      serde_json::from_str::<Vec<Language>>(body).unwrap()
+    );
+
+    mock.assert();
+  }
+
+  #[tokio::test(flavor = "multi_thread")]
+  async fn language_ok() {
+    let TestContext { mut server } = TestContext::new().await;
+
+    let client = Client::new(&server.url());
+
+    let body = r#"{
+      "id": 1,
+      "name": "Bash (4.4)",
+      "is_archived": true,
+      "source_file": "script.sh",
+      "compile_cmd": null,
+      "run_cmd": "/usr/local/bash-4.4/bin/bash script.sh"
+    }"#;
+
+    let mock = server
+      .mock("GET", "/languages/1")
+      .with_status(200)
+      .with_header("content-type", "application/json")
+      .with_body(body)
+      .create();
+
+    let language = client.get_language(1).await.unwrap();
+
+    assert_eq!(language, serde_json::from_str::<Language>(body).unwrap());
+
+    mock.assert();
   }
 }
