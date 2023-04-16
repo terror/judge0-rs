@@ -56,7 +56,7 @@ impl Client {
   ///
   /// assert!(client.authorize().await.is_ok());
   /// ```
-  pub async fn autorize(self) -> Result {
+  pub async fn authorize(self) -> Result {
     self.request("/authorize", Method::POST).await
   }
 
@@ -128,7 +128,20 @@ impl Client {
   /// let about = client.get_about().await.unwrap();
   /// ```
   pub async fn get_about(self) -> Result<About> {
-    self.request::<About>("/statuses", Method::GET).await
+    self.request::<About>("/about", Method::GET).await
+  }
+
+  /// Get worker information.
+  ///
+  /// ```rust
+  /// use judge0_rs::{Client, Config};
+  ///
+  /// let client = Client::new("http://localhost:2358").configure(Config::default());
+  ///
+  /// let workers = client.get_workers().await.unwrap();
+  /// ```
+  pub async fn get_workers(self) -> Result<Vec<Worker>> {
+    self.request::<Vec<Worker>>("/workers", Method::GET).await
   }
 
   /// Create a submission.
@@ -457,6 +470,94 @@ mod tests {
     let language = client.get_language(1).await.unwrap();
 
     assert_eq!(language, serde_json::from_str::<Language>(body).unwrap());
+
+    mock.assert();
+  }
+
+  #[tokio::test(flavor = "multi_thread")]
+  async fn about_ok() {
+    let TestContext { mut server } = TestContext::new().await;
+
+    let client = Client::new(&server.url());
+
+    let body = r#"{
+      "version": "1.5.0",
+      "homepage": "https://judge0.com",
+      "source_code": "https://github.com/judge0/judge0",
+      "maintainer": "Herman Zvonimir Došilović <hermanz.dosilovic@gmail.com>"
+    }"#;
+
+    let mock = server
+      .mock("GET", "/about")
+      .with_status(200)
+      .with_header("content-type", "application/json")
+      .with_body(body)
+      .create();
+
+    let about = client.get_about().await.unwrap();
+
+    assert_eq!(about, serde_json::from_str::<About>(body).unwrap());
+
+    mock.assert();
+  }
+
+  #[tokio::test(flavor = "multi_thread")]
+  async fn workers_ok() {
+    let TestContext { mut server } = TestContext::new().await;
+
+    let client = Client::new(&server.url());
+
+    let body = r#"[{
+      "queue": "default",
+      "size": 0,
+      "available": 1,
+      "idle": 1,
+      "working": 0,
+      "paused": 0,
+      "failed": 0
+    }]"#;
+
+    let mock = server
+      .mock("GET", "/workers")
+      .with_status(200)
+      .with_header("content-type", "application/json")
+      .with_body(body)
+      .create();
+
+    let workers = client.get_workers().await.unwrap();
+
+    assert_eq!(workers, serde_json::from_str::<Vec<Worker>>(body).unwrap());
+
+    mock.assert();
+  }
+
+  #[tokio::test(flavor = "multi_thread")]
+  async fn create_submission_ok() {
+    let TestContext { mut server } = TestContext::new().await;
+
+    let client = Client::new(&server.url());
+
+    let body = r#"{
+      "token": "d85cd024-1548-4165-96c7-7bc88673f194"
+    }"#;
+
+    let mock = server
+      .mock("POST", "/submissions?base64_encoded=false&wait=false")
+      .with_status(201)
+      .with_header("content-type", "application/json")
+      .with_body(body)
+      .create();
+
+    let result = client
+      .create_submission(Submission {
+        source_code: r#"print("Hello, world!")"#.into(),
+        language_id: 1,
+        ..Default::default()
+      })
+      .await
+      .unwrap();
+
+    assert_eq!(result, serde_json::from_str::<Value>(body).unwrap());
 
     mock.assert();
   }
