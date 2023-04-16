@@ -3,6 +3,9 @@ name = "judge0-rs"
 version = "0.0.0"
 edition = "2021"
 
+[lib]
+doctest = false
+
 [dependencies]
 chrono = { version = "0.4.24", features = ["serde"] }
 http = "0.2.9"
