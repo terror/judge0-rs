@@ -2,9 +2,9 @@ use super::*;
 
 #[derive(Debug)]
 pub struct Client<'a> {
-  base64_encoded: bool,
   base_url: &'a str,
   client: reqwest::Client,
+  base64_encoded: bool,
   wait: bool,
 }
 
@@ -12,9 +12,9 @@ impl<'a> Client<'a> {
   /// Create a new client.
   pub fn new(base_url: &'a str) -> Client {
     Self {
-      base64_encoded: false,
       base_url,
       client: reqwest::Client::new(),
+      base64_encoded: false,
       wait: false,
     }
   }
@@ -84,20 +84,75 @@ impl<'a> Client<'a> {
       .await
   }
 
-  /// Get a single submission.
+  /// Get a single submission by token.
   pub async fn get_submission(
     self,
     token: &str,
-    fields: &str,
+    fields: Option<&str>,
   ) -> Result<Submission> {
     self
       .request::<Submission>(
         &format!(
-          "/submissions/{token}?base64_encoded={}&wait={}&fields={fields}",
-          self.base64_encoded, self.wait
+          "/submissions/{token}?base64_encoded={}&wait={}&fields={}",
+          fields.unwrap_or("*"),
+          self.base64_encoded,
+          self.wait
         ),
         Method::GET,
         None,
+      )
+      .await
+  }
+
+  /// Delete a single submission by token.
+  pub async fn delete_submission(
+    self,
+    token: &str,
+    fields: Option<&str>,
+    headers: Option<HeaderMap>,
+  ) -> Result<Submission> {
+    self
+      .request::<Submission>(
+        &format!("/submissions/{token}?fields={}", fields.unwrap_or("*"),),
+        Method::DELETE,
+        headers,
+      )
+      .await
+  }
+
+  /// Create a batch submission.
+  pub async fn batch_submit(
+    self,
+    submissions: Vec<Submission>,
+    headers: Option<HeaderMap>,
+  ) -> Result<Vec<Value>> {
+    self
+      .request_with_body::<Vec<Value>, Vec<Submission>>(
+        &format!("/submissions/batch?base64_encoded={}", self.base64_encoded),
+        Method::POST,
+        headers,
+        submissions,
+      )
+      .await
+  }
+
+  /// Get a batch submission.
+  pub async fn get_batch_submission(
+    self,
+    tokens: Vec<&str>,
+    fields: &str,
+    headers: Option<HeaderMap>,
+  ) -> Result<Vec<Submission>> {
+    self
+      .request::<Vec<Submission>>(
+        &format!(
+          "/submission/batch?tokens={}&base64_encoded={}&fields={}",
+          tokens.join(","),
+          self.base64_encoded,
+          fields
+        ),
+        Method::GET,
+        headers,
       )
       .await
   }
@@ -116,6 +171,27 @@ impl<'a> Client<'a> {
     if let Some(headers) = headers {
       request = request.headers(headers);
     }
+
+    Ok(request.send().await?.json::<T>().await?)
+  }
+
+  /// Make an asynchronous request with a body.
+  async fn request_with_body<T: DeserializeOwned, B: Serialize>(
+    &self,
+    endpoint: &str,
+    method: Method,
+    headers: Option<HeaderMap>,
+    body: B,
+  ) -> Result<T> {
+    let mut request = self
+      .client
+      .request(method, format!("{}{}", self.base_url, endpoint));
+
+    if let Some(headers) = headers {
+      request = request.headers(headers);
+    }
+
+    request = request.body(serde_json::to_string(&body)?);
 
     Ok(request.send().await?.json::<T>().await?)
   }
