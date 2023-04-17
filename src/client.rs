@@ -39,7 +39,10 @@ impl Client {
   /// ```rust
   /// use judge0_rs::{Client, Config};
   ///
-  /// let client = Client::new("http://localhost:2358").configure(Config::default());
+  /// let client = Client::new("http://localhost:2358").configure(Config {
+  ///   authentication_token: Some("token".into()),
+  ///   ..Default::default()
+  /// });
   ///
   /// assert!(client.authenticate().await.is_ok());
   /// ```
@@ -52,7 +55,10 @@ impl Client {
   /// ```rust
   /// use judge0_rs::{Client, Config};
   ///
-  /// let client = Client::new("http://localhost:2358").configure(Config::default());
+  /// let client = Client::new("http://localhost:2358").configure(Config {
+  ///   authorization_token: Some("token".into()),
+  ///   ..Default::default()
+  /// });
   ///
   /// assert!(client.authorize().await.is_ok());
   /// ```
@@ -310,9 +316,12 @@ impl Client {
   ///
   /// let result = client.batch_submit(submissions).await.unwrap();
   ///
-  /// let tokens = result.iter().map(|value| value["token"]).collect::<Vec<String>>();
+  /// let tokens = result
+  ///   .iter()
+  ///   .map(|value| value["token"])
+  ///   .collect::<Vec<String>>();
   ///
-  /// let batch_submission = get_back_submission(tokens.join(","), None).await.unwrap();
+  /// let batch_submission = get_back_submission(tokens, None).await.unwrap();
   /// ```
   pub async fn get_batch_submission(
     self,
@@ -552,6 +561,169 @@ mod tests {
       .create_submission(Submission {
         source_code: r#"print("Hello, world!")"#.into(),
         language_id: 1,
+        ..Default::default()
+      })
+      .await
+      .unwrap();
+
+    assert_eq!(result, serde_json::from_str::<Value>(body).unwrap());
+
+    mock.assert();
+  }
+
+  #[tokio::test(flavor = "multi_thread")]
+  async fn create_submission_invalid_language() {
+    let TestContext { mut server } = TestContext::new().await;
+
+    let client = Client::new(&server.url());
+
+    let body = r#"{
+      "language_id": ["language with id 9000 doesn't exist"]
+    }"#;
+
+    let mock = server
+      .mock("POST", "/submissions?base64_encoded=false&wait=false")
+      .with_status(422)
+      .with_header("content-type", "application/json")
+      .with_body(body)
+      .create();
+
+    let result = client
+      .create_submission(Submission {
+        source_code: r#"print("Hello, world!")"#.into(),
+        language_id: 9000,
+        ..Default::default()
+      })
+      .await
+      .unwrap();
+
+    assert_eq!(result, serde_json::from_str::<Value>(body).unwrap());
+
+    mock.assert();
+  }
+
+  #[tokio::test(flavor = "multi_thread")]
+  async fn create_submission_invalid_wall_time_limit() {
+    let TestContext { mut server } = TestContext::new().await;
+
+    let client = Client::new(&server.url());
+
+    let body = r#"{
+      "wall_time_limit": ["must be less than or equal to 150"]
+    }"#;
+
+    let mock = server
+      .mock("POST", "/submissions?base64_encoded=false&wait=false")
+      .with_status(422)
+      .with_header("content-type", "application/json")
+      .with_body(body)
+      .create();
+
+    let result = client
+      .create_submission(Submission {
+        source_code: r#"print("Hello, world!")"#.into(),
+        language_id: 4,
+        number_of_runs: Some(1),
+        stdin: Some("Judge0".into()),
+        expected_output: Some("hello, Judge0".into()),
+        cpu_time_limit: Some(1.0),
+        cpu_extra_time: Some(0.5),
+        wall_time_limit: Some(100000.0),
+        memory_limit: Some(128000.0),
+        stack_limit: Some(128000),
+        enable_per_process_and_thread_time_limit: Some(false),
+        enable_per_process_and_thread_memory_limit: Some(false),
+        max_file_size: Some(1024),
+        ..Default::default()
+      })
+      .await
+      .unwrap();
+
+    assert_eq!(result, serde_json::from_str::<Value>(body).unwrap());
+
+    mock.assert();
+  }
+
+  #[tokio::test(flavor = "multi_thread")]
+  async fn create_submission_invalid_utf8() {
+    let TestContext { mut server } = TestContext::new().await;
+
+    let client = Client::new(&server.url()).configure(Config {
+      wait: true,
+      ..Default::default()
+    });
+
+    let body = r#"{
+      "token": "fcd0de6d-ee52-4a9d-8a00-6e0d98d394cf",
+      "error": "some attributes for this submission cannot be converted to UTF-8, use base64_encoded=true query parameter"
+    }"#;
+
+    let mock = server
+      .mock("POST", "/submissions?base64_encoded=false&wait=true")
+      .with_status(201)
+      .with_header("content-type", "application/json")
+      .with_body(body)
+      .create();
+
+    let result = client
+      .create_submission(Submission {
+        source_code: r#""print(\"\xFE\")""#.into(),
+        language_id: 70,
+        ..Default::default()
+      })
+      .await
+      .unwrap();
+
+    assert_eq!(result, serde_json::from_str::<Value>(body).unwrap());
+
+    mock.assert();
+  }
+
+  #[tokio::test(flavor = "multi_thread")]
+  async fn create_submission_wait_for_finish() {
+    let TestContext { mut server } = TestContext::new().await;
+
+    let client = Client::new(&server.url()).configure(Config {
+      wait: true,
+      ..Default::default()
+    });
+
+    let body = r#"{
+      "stdout": "hello, Judge0\n",
+      "time": "0.001",
+      "memory": 380,
+      "stderr": null,
+      "token": "eb0dd001-66db-47f4-8a69-b736c9bc23f6",
+      "compile_output": null,
+      "message": null,
+      "status": {
+        "id": 3,
+        "description": "Accepted"
+      }
+    }"#;
+
+    let mock = server
+      .mock("POST", "/submissions?base64_encoded=false&wait=true")
+      .with_status(201)
+      .with_header("content-type", "application/json")
+      .with_body(body)
+      .create();
+
+    let result = client
+      .create_submission(Submission {
+        source_code: r#"
+          #include <stdio.h>
+
+          int main(void) {
+            char name[10];
+            scanf("%s", name);
+            printf("hello, %s\n", name);
+            return 0;
+          }"#
+          .into(),
+        language_id: 4,
+        stdin: Some("Judge0".into()),
+        expected_output: Some("hello, Judge0".into()),
         ..Default::default()
       })
       .await
