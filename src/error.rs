@@ -4,4 +4,8 @@ pub enum Error {
   Request(#[from] reqwest::Error),
   #[error("Failed to serialize/deserialize json")]
   Serde(#[from] serde_json::Error),
+  #[error("Invalid header name: {0}")]
+  HeaderName(String),
+  #[error("Invalid header value: {0}")]
+  HeaderValue(String),
 }

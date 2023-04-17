@@ -345,22 +345,29 @@ impl Client {
   fn headers(&self) -> Result<HeaderMap> {
     let mut headers = HeaderMap::new();
 
-    headers.insert(
-      "content-type",
-      HeaderValue::from_str("application/json").unwrap(),
-    );
+    let header_name = |name: &str| -> Result<HeaderName> {
+      HeaderName::from_str(name)
+        .map_err(|_| Error::HeaderName(name.to_string()))
+    };
+
+    let header_value = |value: &str| -> Result<HeaderValue> {
+      HeaderValue::from_str(value)
+        .map_err(|_| Error::HeaderName(value.to_string()))
+    };
+
+    headers.insert("content-type", header_value("application/json")?);
 
     if let Some(authentication_token) = &self.config.authentication_token {
       headers.insert(
-        HeaderName::from_str(&self.config.authentication_header_name).unwrap(),
-        HeaderValue::from_str(authentication_token).unwrap(),
+        header_name(&self.config.authentication_header_name)?,
+        header_value(authentication_token)?,
       );
     }
 
     if let Some(authorization_token) = &self.config.authorization_token {
       headers.insert(
-        HeaderName::from_str(&self.config.authorization_header_name).unwrap(),
-        HeaderValue::from_str(authorization_token).unwrap(),
+        header_name(&self.config.authorization_header_name)?,
+        header_value(authorization_token)?,
       );
     }
 
@@ -377,7 +384,7 @@ impl Client {
       self
         .client
         .request(method, format!("{}{}", self.base_url, endpoint))
-        .headers(self.headers().unwrap())
+        .headers(self.headers()?)
         .send()
         .await?
         .json::<T>()
@@ -396,7 +403,7 @@ impl Client {
       self
         .client
         .request(method, format!("{}{}", self.base_url, endpoint))
-        .headers(self.headers().unwrap())
+        .headers(self.headers()?)
         .body(serde_json::to_string(&body)?)
         .send()
         .await?
